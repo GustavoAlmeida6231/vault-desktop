@@ -1,12 +1,13 @@
 name: Publicar versão
 
-# Cada push na main gera uma versão nova (1.2.<número da execução>) e publica em Releases.
+# Cada push na main publica a versão que está no package.json (veja VERSIONING.md: todo push precisa subir a versão).
 # O Vault instalado nos computadores encontra essa versão sozinho e mostra o ícone verde de atualização.
 on:
   push:
     branches: [main]
     paths-ignore:
       - 'README.md'
+      - 'CHANGELOG.md'
   workflow_dispatch:
 
 permissions:
@@ -25,10 +26,15 @@ jobs:
       - name: Instalar dependências
         run: npm install --no-audit --no-fund
 
-      - name: Definir versão
+      - name: Ler versão do package.json
+        shell: bash
         run: |
-          npm version "1.2.${{ github.run_number }}" --no-git-tag-version
-          echo "VERSION=1.2.${{ github.run_number }}" >> $env:GITHUB_ENV
+          VERSION=$(node -p "require('./package.json').version")
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "A versão v$VERSION já foi publicada. Suba a versão no package.json (veja VERSIONING.md) e envie de novo."
+            exit 1
+          fi
 
       # Gera o instalador + latest.yml (o arquivo que o app consulta para saber se há versão nova)
       - name: Gerar instalador
@@ -36,7 +42,7 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
-      # Publica tudo numa Release v1.2.N (o app procura a Release mais recente)
+      # Publica tudo numa Release vX.Y.Z (o app procura a Release mais recente)
       - name: Publicar Release
         uses: softprops/action-gh-release@v2
         with:
