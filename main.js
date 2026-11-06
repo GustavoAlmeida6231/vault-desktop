@@ -52,6 +52,30 @@ let mainWindow = null;
 let picker = null; // { win, resolve, audioRequested }
 let tray = null;
 let isQuitting = false; // só fica true quando o usuário escolhe "Sair do Vault"
+// Aberto pelo Windows ao ligar o PC: fica só na bandeja, sem abrir a janela (as notificações já funcionam)
+const startedHidden = process.argv.includes('--hidden') || (process.platform === 'win32' && app.getLoginItemSettings().wasOpenedAtLogin);
+
+function launchAtLoginEnabled() {
+  try {
+    const flag = path.join(app.getPath('userData'), 'no-autostart');
+    return !fs.existsSync(flag);
+  } catch {
+    return true;
+  }
+}
+function applyLaunchAtLogin() {
+  if (!app.isPackaged || process.platform !== 'win32') return;
+  app.setLoginItemSettings({ openAtLogin: launchAtLoginEnabled(), args: ['--hidden'] });
+}
+function toggleLaunchAtLogin() {
+  const flag = path.join(app.getPath('userData'), 'no-autostart');
+  try {
+    if (launchAtLoginEnabled()) fs.writeFileSync(flag, '1');
+    else fs.unlinkSync(flag);
+  } catch {}
+  applyLaunchAtLogin();
+  buildTrayMenu();
+}
 
 // No Windows o .ico tem cada tamanho desenhado à parte (16, 24, 32...), então fica nítido na bandeja e na barra de tarefas
 const ICON_PATH = path.join(__dirname, 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png');
@@ -91,7 +115,9 @@ function createWindow() {
     },
   });
 
-  mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.once('ready-to-show', () => {
+    if (!startedHidden) mainWindow.show();
+  });
   // Clicar no X esconde a janela; a chamada e o chat continuam rodando na bandeja
   mainWindow.on('close', (e) => {
     if (isQuitting) return;
@@ -184,6 +210,7 @@ function buildTrayMenu() {
     { label: 'Mutar / desmutar (Ctrl+Shift+M)', click: () => sendShortcut('mute') },
     { label: 'Ensurdecer (Ctrl+Shift+D)', click: () => sendShortcut('deafen') },
     { type: 'separator' },
+    { label: 'Abrir o Vault ao ligar o computador', type: 'checkbox', checked: launchAtLoginEnabled(), click: toggleLaunchAtLogin },
     { label: `Versão ${app.getVersion()}`, enabled: false },
     { label: 'Procurar atualizações', click: () => checkForUpdates(true) },
     { label: 'Sair do Vault', click: quitApp },
@@ -407,7 +434,8 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     Menu.setApplicationMenu(null);
     setupSession();
-    createWindow();
+    createWindow(); // a janela carrega o site mesmo escondida, então as notificações chegam na bandeja
+    applyLaunchAtLogin();
     createTray();
     setupShortcuts();
     setupUpdater();
