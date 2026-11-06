@@ -10,7 +10,7 @@
  *  - atualização automática: baixa sozinho a versão nova e mostra o ícone verde no canto superior esquerdo
  */
 
-const { app, BrowserWindow, Menu, Tray, desktopCapturer, globalShortcut, ipcMain, nativeImage, session, shell } = require('electron');
+const { app, BrowserWindow, Menu, Tray, desktopCapturer, globalShortcut, ipcMain, nativeImage, powerMonitor, session, shell } = require('electron');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
 const os = require('os');
@@ -437,6 +437,15 @@ if (!app.requestSingleInstanceLock()) {
     createWindow(); // a janela carrega o site mesmo escondida, então as notificações chegam na bandeja
     applyLaunchAtLogin();
     createTray();
+    // PC voltando do repouso / tela desbloqueada: avisa o Vault para conferir mensagens e lançamentos
+    // novos na hora (a conexão em tempo real costuma cair durante o repouso)
+    const nudge = () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.executeJavaScript("window.dispatchEvent(new Event('online'))").catch(() => {});
+      }
+    };
+    powerMonitor.on('resume', () => setTimeout(nudge, 3000));
+    powerMonitor.on('unlock-screen', nudge);
     setupShortcuts();
     setupUpdater();
     app.on('activate', showWindow);
