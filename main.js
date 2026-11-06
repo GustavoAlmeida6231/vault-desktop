@@ -253,6 +253,9 @@ ipcMain.handle('vault:update-state', (event) => {
   if (!mainWindow || event.sender !== mainWindow.webContents) return { status: 'idle' };
   return updateState;
 });
+ipcMain.on('vault:show-window', (event) => {
+  if (mainWindow && event.sender === mainWindow.webContents) showWindow();
+});
 ipcMain.on('vault:install-update', (event) => {
   if (mainWindow && event.sender === mainWindow.webContents) installUpdate();
 });

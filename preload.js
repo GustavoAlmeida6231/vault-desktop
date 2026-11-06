@@ -21,4 +21,8 @@ contextBridge.exposeInMainWorld('vaultDesktop', {
   installUpdate() {
     ipcRenderer.send('vault:install-update');
   },
+  // Clique numa notificação: traz a janela do Vault para a frente (mesmo escondida na bandeja)
+  showWindow() {
+    ipcRenderer.send('vault:show-window');
+  },
 });
