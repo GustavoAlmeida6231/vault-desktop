@@ -26,10 +26,25 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Definir versão
-        run: npm version "1.2.${{ github.run_number }}" --no-git-tag-version
+        run: |
+          npm version "1.2.${{ github.run_number }}" --no-git-tag-version
+          echo "VERSION=1.2.${{ github.run_number }}" >> $env:GITHUB_ENV
 
-      - name: Gerar instalador e publicar
-        run: npx electron-builder --win --publish always
+      # Gera o instalador + latest.yml (o arquivo que o app consulta para saber se há versão nova)
+      - name: Gerar instalador
+        run: npx electron-builder --win --publish never
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      # Publica tudo numa Release v1.2.N (o app procura a Release mais recente)
+      - name: Publicar Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: Vault ${{ env.VERSION }}
+          body: Baixe o arquivo Vault-Setup-${{ env.VERSION }}.exe abaixo e abra para instalar. Quem já tem o Vault instalado recebe esta versão sozinho.
+          make_latest: true
+          files: |
+            dist/Vault-Setup-${{ env.VERSION }}.exe
+            dist/Vault-Setup-${{ env.VERSION }}.exe.blockmap
+            dist/latest.yml
