@@ -1,0 +1,67 @@
+{
+  "name": "vault-desktop",
+  "productName": "Vault",
+  "version": "1.2.0",
+  "description": "Vault para Windows: metas, chat e chamadas com compartilhamento de tela em alta qualidade",
+  "main": "main.js",
+  "author": "Vault",
+  "license": "UNLICENSED",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GustavoAlmeida6231/vault-desktop.git"
+  },
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^43.6.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "app.vault.desktop",
+    "productName": "Vault",
+    "artifactName": "Vault-Setup-${version}.${ext}",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "picker.html",
+      "picker-preload.js",
+      "build/icon.png"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Vault"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "GustavoAlmeida6231",
+        "repo": "vault-desktop",
+        "releaseType": "release"
+      }
+    ]
+  }
+}

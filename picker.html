@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+    <title>Compartilhar tela</title>
+    <style>
+      :root {
+        --bg: #0b0d10;
+        --panel: #12151a;
+        --card: #171b21;
+        --line: rgba(255, 255, 255, 0.07);
+        --text: #e5e7eb;
+        --muted: #8b93a1;
+        --green: #22c55e;
+        --green-d: #16a34a;
+        --gold: #e9c25a;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; }
+      body { display: flex; flex-direction: column; user-select: none; }
+      header { padding: 18px 22px 0; }
+      h1 { margin: 0; font-size: 18px; font-weight: 700; }
+      .sub { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+      .tabs { display: flex; gap: 6px; margin: 14px 0 0; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; width: max-content; }
+      .tab { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; padding: 6px 14px; border-radius: 8px; cursor: pointer; }
+      .tab[aria-selected='true'] { background: #262c35; color: #fff; }
+      main { flex: 1; overflow-y: auto; padding: 16px 22px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+      .card { background: var(--card); border: 2px solid transparent; border-radius: 14px; padding: 8px; cursor: pointer; text-align: left; color: inherit; font: inherit; transition: border-color 0.12s, background 0.12s; }
+      .card:hover { background: #1c2128; }
+      .card[aria-pressed='true'] { border-color: var(--green); background: #16201a; }
+      .thumb { aspect-ratio: 16 / 9; width: 100%; border-radius: 9px; background: #07080a; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+      .thumb img { width: 100%; height: 100%; object-fit: contain; }
+      .name { display: flex; align-items: center; gap: 7px; margin-top: 8px; font-size: 13px; overflow: hidden; }
+      .name span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .name img { width: 16px; height: 16px; flex: none; }
+      .empty { color: var(--muted); font-size: 14px; padding: 40px 0; text-align: center; }
+      footer { display: flex; align-items: center; gap: 14px; padding: 14px 22px; border-top: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+      .audio { display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; }
+      .audio input { width: 18px; height: 18px; accent-color: var(--green); cursor: pointer; }
+      .note { font-size: 12px; color: var(--muted); margin-top: 2px; }
+      .note.warn { color: var(--gold); }
+      .spacer { flex: 1; }
+      button.btn { border: 1px solid var(--line); border-radius: 12px; padding: 10px 18px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+      .ghost { background: #1c2128; color: var(--text); }
+      .ghost:hover { background: #242a33; }
+      .primary { background: var(--green-d); color: #fff; border-color: transparent; }
+      .primary:hover { background: var(--green); }
+      .primary:disabled { opacity: 0.4; cursor: not-allowed; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>O que você quer compartilhar?</h1>
+      <p class="sub">Clique duas vezes para compartilhar na hora.</p>
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" data-kind="screen" aria-selected="true">Telas inteiras</button>
+        <button class="tab" role="tab" data-kind="window" aria-selected="false">Janelas</button>
+      </div>
+    </header>
+    <main><div class="grid" id="grid"></div></main>
+    <footer>
+      <div id="audioBox">
+        <label class="audio"><input type="checkbox" id="audio" checked /> Compartilhar o som do computador</label>
+        <div class="note" id="note"></div>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn ghost" id="cancel">Cancelar</button>
+      <button class="btn primary" id="share" disabled>Compartilhar</button>
+    </footer>
+    <script>
+      const grid = document.getElementById('grid');
+      const shareBtn = document.getElementById('share');
+      const audioEl = document.getElementById('audio');
+      const audioBox = document.getElementById('audioBox');
+      const note = document.getElementById('note');
+      let data = { sources: [] };
+      let kind = 'screen';
+      let selected = null;
+
+      function el(tag, attrs, children) {
+        const n = document.createElement(tag);
+        Object.assign(n, attrs || {});
+        (children || []).forEach((c) => c && n.appendChild(c));
+        return n;
+      }
+
+      function render() {
+        grid.textContent = '';
+        const list = data.sources.filter((s) => s.kind === kind);
+        if (!list.length) {
+          grid.appendChild(el('div', { className: 'empty', textContent: kind === 'screen' ? 'Nenhuma tela encontrada.' : 'Nenhuma janela aberta.' }));
+          return;
+        }
+        for (const s of list) {
+          const thumb = el('div', { className: 'thumb' }, [s.thumbnail ? el('img', { src: s.thumbnail, alt: '' }) : null]);
+          const name = el('div', { className: 'name' }, [s.icon ? el('img', { src: s.icon, alt: '' }) : null, el('span', { textContent: s.name, title: s.name })]);
+          const card = el('button', { className: 'card', type: 'button' }, [thumb, name]);
+          card.setAttribute('aria-pressed', String(selected === s.id));
+          card.onclick = () => {
+            selected = s.id;
+            shareBtn.disabled = false;
+            render();
+          };
+          card.ondblclick = () => {
+            selected = s.id;
+            share();
+          };
+          grid.appendChild(card);
+        }
+      }
+
+      function share() {
+        if (!selected) return;
+        window.picker.choose(selected, audioEl.checked && data.audioRequested && data.audioSupported);
+      }
+
+      document.querySelectorAll('.tab').forEach((t) => {
+        t.onclick = () => {
+          kind = t.dataset.kind;
+          document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', String(x === t)));
+          render();
+        };
+      });
+      shareBtn.onclick = share;
+      document.getElementById('cancel').onclick = () => window.picker.cancel();
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') window.picker.cancel();
+        if (e.key === 'Enter') share();
+      });
+
+      async function load() {
+        data = (await window.picker.getSources()) || { sources: [] };
+        if (!data.audioRequested || !data.audioSupported) {
+          audioEl.checked = false;
+          audioEl.disabled = true;
+          note.textContent = data.audioSupported ? 'O Vault não pediu áudio para este compartilhamento.' : 'Som do computador só funciona no Windows.';
+        } else if (data.excludesOwnAudio) {
+          note.textContent = 'Vai junto o som de jogos, vídeos e músicas. A voz da chamada fica de fora (sem eco).';
+        } else {
+          note.textContent = 'Windows 10 não consegue separar o som da chamada: quem estiver na call pode ouvir eco da própria voz. Desmarque se não precisar do som.';
+          note.className = 'note warn';
+        }
+        const screens = data.sources.filter((s) => s.kind === 'screen');
+        if (screens.length === 1 && !selected) {
+          selected = screens[0].id;
+          shareBtn.disabled = false;
+        }
+        render();
+      }
+      load();
+    </script>
+  </body>
+</html>

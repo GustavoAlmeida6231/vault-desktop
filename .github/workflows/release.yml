@@ -1,0 +1,35 @@
+name: Publicar versão
+
+# Cada push na main gera uma versão nova (1.2.<número da execução>) e publica em Releases.
+# O Vault instalado nos computadores encontra essa versão sozinho e mostra o ícone verde de atualização.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'README.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar dependências
+        run: npm install --no-audit --no-fund
+
+      - name: Definir versão
+        run: npm version "1.2.${{ github.run_number }}" --no-git-tag-version
+
+      - name: Gerar instalador e publicar
+        run: npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
