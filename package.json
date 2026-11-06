@@ -35,7 +35,8 @@
       "preload.js",
       "picker.html",
       "picker-preload.js",
-      "build/icon.png"
+      "build/icon.png",
+      "build/icon.ico"
     ],
     "win": {
       "target": [
@@ -46,7 +47,7 @@
           ]
         }
       ],
-      "icon": "build/icon.png"
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": true,

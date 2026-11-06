@@ -53,7 +53,8 @@ let picker = null; // { win, resolve, audioRequested }
 let tray = null;
 let isQuitting = false; // só fica true quando o usuário escolhe "Sair do Vault"
 
-const ICON_PATH = path.join(__dirname, 'build', 'icon.png');
+// No Windows o .ico tem cada tamanho desenhado à parte (16, 24, 32...), então fica nítido na bandeja e na barra de tarefas
+const ICON_PATH = path.join(__dirname, 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png');
 
 /** Estado da atualização que o site mostra no canto superior esquerdo. */
 let updateState = { status: 'idle' }; // idle | downloading | ready
@@ -78,7 +79,7 @@ function createWindow() {
     show: false,
     title: 'Vault',
     backgroundColor: '#0b0d10',
-    icon: path.join(__dirname, 'build', 'icon.png'),
+    icon: ICON_PATH,
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -192,8 +193,8 @@ function buildTrayMenu() {
 }
 
 function createTray() {
-  const image = nativeImage.createFromPath(ICON_PATH).resize({ width: 32, height: 32, quality: 'best' });
-  tray = new Tray(image);
+  // Passa o arquivo direto: o Windows escolhe o tamanho certo do .ico conforme a escala da tela
+  tray = new Tray(process.platform === 'win32' ? ICON_PATH : nativeImage.createFromPath(ICON_PATH).resize({ width: 32, height: 32, quality: 'best' }));
   buildTrayMenu();
   tray.on('click', showWindow);
   tray.on('double-click', showWindow);
@@ -284,7 +285,7 @@ function openPicker(audioRequested) {
       title: 'Compartilhar tela',
       backgroundColor: '#0b0d10',
       autoHideMenuBar: true,
-      icon: path.join(__dirname, 'build', 'icon.png'),
+      icon: ICON_PATH,
       webPreferences: {
         preload: path.join(__dirname, 'picker-preload.js'),
         contextIsolation: true,
