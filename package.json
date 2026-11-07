@@ -1,7 +1,7 @@
 {
   "name": "vault-desktop",
   "productName": "Vault",
-  "version": "1.6.1",
+  "version": "1.7.0",
   "description": "Vault para Windows: metas, chat e chamadas com compartilhamento de tela em alta qualidade",
   "main": "main.js",
   "author": "Vault",
