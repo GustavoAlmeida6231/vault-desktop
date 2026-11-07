@@ -2,6 +2,9 @@
 
 Segue o versionamento semântico (MAIOR.MENOR.CORREÇÃO): correção de erro sobe o último número, novidade sobe o do meio, mudança grande sobe o primeiro. A versão vem do `package.json`, e todo push precisa subir a versão (o publicador recusa uma versão que já existe).
 
+## 1.5.1 — 2026-11-07
+- Apagar workspace e Renomear canal não funcionavam no app (usavam uma caixa de texto que o Electron não tem). Agora usam uma janela do próprio Vault (site 1.5.1), que o app já mostra ao reabrir. O app em si não mudou: o número sobe junto com o do site.
+
 ## 1.5.0 — 2026-11-07
 - Site e app passam a andar com o mesmo número de versão (esta é a 1.5.0 dos dois).
 - Novidades do site que o app já mostra ao reabrir o Vault: o Dono pode apagar mensagens de qualquer pessoa e qualquer Dono pode apagar o workspace (Configurações > Conta). Requer rodar o SQL `04-dono-apaga-mensagens-e-workspace.sql` no Supabase.
