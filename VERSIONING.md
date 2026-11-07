@@ -19,6 +19,10 @@ Ao subir MENOR, a CORREÇÃO volta a 0. Ao subir MAIOR, MENOR e CORREÇÃO volta
 
 ## App do computador (`vault-desktop`)
 
-Tem versão própria, em `package.json` do repositório do app. A Release `vX.Y.Z` é criada automaticamente a cada push, e o app instalado se atualiza sozinho. Por isso **todo push do app precisa subir a versão** (o publicador recusa uma versão que já existe). Mesmas regras acima.
+A versão do app fica no `package.json` do repositório do app (e deve ser igual à do site, veja abaixo). A Release `vX.Y.Z` é criada automaticamente a cada push, e o app instalado se atualiza sozinho. Por isso **todo push do app precisa subir a versão** (o publicador recusa uma versão que já existe). Mesmas regras acima.
 
-O número do site e o do app não precisam ser iguais: cada um sobe só quando muda.
+## Site e app andam com o MESMO número
+
+Desde a 1.5.0, o site e o app do computador têm sempre o **mesmo número de versão**. Toda atualização sobe os dois para o mesmo número, mesmo que um deles não tenha mudado em código (o app abre o site, então ele já recebe as novidades do site; o CHANGELOG do app diz isso). Faça sempre a Release do app também, é por ela que o app instalado se atualiza.
+
+Mudança só de documentação (como este arquivo) não sobe versão.

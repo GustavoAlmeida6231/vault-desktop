@@ -2,6 +2,11 @@
 
 Segue o versionamento semântico (MAIOR.MENOR.CORREÇÃO): correção de erro sobe o último número, novidade sobe o do meio, mudança grande sobe o primeiro. A versão vem do `package.json`, e todo push precisa subir a versão (o publicador recusa uma versão que já existe).
 
+## 1.5.0 — 2026-11-07
+- Site e app passam a andar com o mesmo número de versão (esta é a 1.5.0 dos dois).
+- Novidades do site que o app já mostra ao reabrir o Vault: o Dono pode apagar mensagens de qualquer pessoa e qualquer Dono pode apagar o workspace (Configurações > Conta). Requer rodar o SQL `04-dono-apaga-mensagens-e-workspace.sql` no Supabase.
+- Chamadas: se a ligação com alguém não fecha, o Vault reinicia a busca de caminho aos 10 s e avisa o motivo aos 25 s (site 1.4.4).
+
 ## 1.4.3 — 2026-11-07
 - Chamadas: novo item na bandeja, **Testar conexão das chamadas**. Ele checa se este computador consegue falar por UDP com a internet e se o roteador/operadora deixa a ligação direta fechar, e explica o que fazer quando a chamada fica em "Conectando..." (firewall do Windows, VPN, CGNAT/servidor TURN).
 - O app desktop carrega o site, então a nova busca de caminho das chamadas (site 1.4.4: reinicia aos 10 s e avisa o motivo aos 25 s) já vale aqui ao reabrir o Vault.
