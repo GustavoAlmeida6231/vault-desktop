@@ -2,6 +2,10 @@
 
 Segue o versionamento semântico (MAIOR.MENOR.CORREÇÃO): correção de erro sobe o último número, novidade sobe o do meio, mudança grande sobe o primeiro. A versão vem do `package.json`, e todo push precisa subir a versão (o publicador recusa uma versão que já existe).
 
+## 1.4.2 — 2026-11-06
+- Conexão: se o Vault abrir sem internet (por exemplo junto com o Windows, antes da rede subir) ou a rede cair, o app mostra "Sem conexão" e tenta de novo sozinho (a cada 3 s, depois até 15 s) até conectar, sem precisar clicar. Ao voltar do repouso ou desbloquear a tela ele também tenta na hora.
+- Se a página do Vault travar ou for encerrada pelo sistema, o app recarrega sozinho em vez de ficar em branco.
+
 ## 1.4.1 — 2026-11-06
 - Voltando do repouso (ou ao desbloquear a tela) o Vault confere na hora se chegou mensagem ou lançamento novo, para o aviso não se perder.
 - O motor do app (Electron) passa a ter a versão fixa (43.8.7): cada atualização do app usa exatamente o mesmo motor já testado, sem mudar sozinho.

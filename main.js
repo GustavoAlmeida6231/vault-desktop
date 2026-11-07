@@ -51,6 +51,8 @@ function originOf(url) {
 let mainWindow = null;
 let picker = null; // { win, resolve, audioRequested }
 let tray = null;
+let retryTimer = null;
+let retryDelay = 3000;
 let isQuitting = false; // só fica true quando o usuário escolhe "Sair do Vault"
 // Aberto pelo Windows ao ligar o PC: fica só na bandeja, sem abrir a janela (as notificações já funcionam)
 const startedHidden = process.argv.includes('--hidden') || (process.platform === 'win32' && app.getLoginItemSettings().wasOpenedAtLogin);
@@ -147,8 +149,25 @@ function createWindow() {
     if (/^https?:/i.test(url)) shell.openExternal(url);
   });
 
+  // Sem internet ao abrir (comum quando o app abre junto com o Windows, antes da rede subir) ou rede que caiu:
+  // mostra o aviso e tenta de novo sozinho, a cada 3 s no começo e até 15 s depois, até conectar.
   mainWindow.webContents.on('did-fail-load', (_e, code, _desc, url, isMainFrame) => {
-    if (isMainFrame && code !== -3 && originOf(url) === APP_ORIGIN) mainWindow.loadURL(offlinePage());
+    if (!isMainFrame || code === -3 || originOf(url) !== APP_ORIGIN) return;
+    mainWindow.loadURL(offlinePage());
+    clearTimeout(retryTimer);
+    retryTimer = setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(APP_URL);
+    }, retryDelay);
+    retryDelay = Math.min(retryDelay * 2, 15_000);
+  });
+  mainWindow.webContents.on('did-finish-load', () => {
+    if (originOf(mainWindow.webContents.getURL()) === APP_ORIGIN) retryDelay = 3000;
+  });
+  // O Chromium da página travou ou foi encerrado: recarrega em vez de deixar a janela em branco
+  mainWindow.webContents.on('render-process-gone', () => {
+    setTimeout(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(APP_URL);
+    }, 1000);
   });
 
   // F5 recarrega, F11 tela cheia, Ctrl+Shift+I abre o console (para diagnóstico)
@@ -440,9 +459,14 @@ if (!app.requestSingleInstanceLock()) {
     // PC voltando do repouso / tela desbloqueada: avisa o Vault para conferir mensagens e lançamentos
     // novos na hora (a conexão em tempo real costuma cair durante o repouso)
     const nudge = () => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.executeJavaScript("window.dispatchEvent(new Event('online'))").catch(() => {});
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      // preso na tela "Sem conexão": tenta abrir o Vault de novo agora
+      if (originOf(mainWindow.webContents.getURL()) !== APP_ORIGIN) {
+        retryDelay = 3000;
+        mainWindow.loadURL(APP_URL);
+        return;
       }
+      mainWindow.webContents.executeJavaScript("window.dispatchEvent(new Event('online'))").catch(() => {});
     };
     powerMonitor.on('resume', () => setTimeout(nudge, 3000));
     powerMonitor.on('unlock-screen', nudge);
