@@ -2,6 +2,9 @@
 
 Segue o versionamento semântico (MAIOR.MENOR.CORREÇÃO): correção de erro sobe o último número, novidade sobe o do meio, mudança grande sobe o primeiro. A versão vem do `package.json`, e todo push precisa subir a versão (o publicador recusa uma versão que já existe).
 
+## 1.6.0 — 2026-11-07
+- O site ganhou o botão **Baixar para Windows** (Configurações e tela de login), que sempre baixa a última versão deste app. O app em si não mudou: o número sobe junto com o do site.
+
 ## 1.5.1 — 2026-11-07
 - Apagar workspace e Renomear canal não funcionavam no app (usavam uma caixa de texto que o Electron não tem). Agora usam uma janela do próprio Vault (site 1.5.1), que o app já mostra ao reabrir. O app em si não mudou: o número sobe junto com o do site.
 
