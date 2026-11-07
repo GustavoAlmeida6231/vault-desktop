@@ -2,6 +2,10 @@
 
 Segue o versionamento semântico (MAIOR.MENOR.CORREÇÃO): correção de erro sobe o último número, novidade sobe o do meio, mudança grande sobe o primeiro. A versão vem do `package.json`, e todo push precisa subir a versão (o publicador recusa uma versão que já existe).
 
+## 1.4.3 — 2026-11-07
+- Chamadas: novo item na bandeja, **Testar conexão das chamadas**. Ele checa se este computador consegue falar por UDP com a internet e se o roteador/operadora deixa a ligação direta fechar, e explica o que fazer quando a chamada fica em "Conectando..." (firewall do Windows, VPN, CGNAT/servidor TURN).
+- O app desktop carrega o site, então a nova busca de caminho das chamadas (site 1.4.4: reinicia aos 10 s e avisa o motivo aos 25 s) já vale aqui ao reabrir o Vault.
+
 ## 1.4.2 — 2026-11-06
 - Conexão: se o Vault abrir sem internet (por exemplo junto com o Windows, antes da rede subir) ou a rede cair, o app mostra "Sem conexão" e tenta de novo sozinho (a cada 3 s, depois até 15 s) até conectar, sem precisar clicar. Ao voltar do repouso ou desbloquear a tela ele também tenta na hora.
 - Se a página do Vault travar ou for encerrada pelo sistema, o app recarrega sozinho em vez de ficar em branco.

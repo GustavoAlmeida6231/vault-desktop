@@ -10,7 +10,8 @@
  *  - atualização automática: baixa sozinho a versão nova e mostra o ícone verde no canto superior esquerdo
  */
 
-const { app, BrowserWindow, Menu, Tray, desktopCapturer, globalShortcut, ipcMain, nativeImage, powerMonitor, session, shell } = require('electron');
+const { app, BrowserWindow, Menu, Tray, desktopCapturer, dialog, globalShortcut, ipcMain, nativeImage, powerMonitor, session, shell } = require('electron');
+const dgram = require('dgram');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
 const os = require('os');
@@ -218,6 +219,87 @@ function showTrayHintOnce() {
   } catch {}
 }
 
+// ---- Teste de conexão das chamadas ---------------------------------------------------------
+// Pergunta a dois servidores STUN qual é o endereço público deste computador. Serve para
+// descobrir por que a chamada fica em "Conectando...": UDP bloqueado (firewall/VPN) ou roteador
+// que muda a porta a cada destino (NAT simétrico/CGNAT), casos em que só um servidor TURN resolve.
+function stunProbe(host, port, timeoutMs = 3500) {
+  return new Promise((resolve) => {
+    const sock = dgram.createSocket('udp4');
+    const tx = require('crypto').randomBytes(12);
+    const req = Buffer.alloc(20);
+    req.writeUInt16BE(0x0001, 0);
+    req.writeUInt16BE(0, 2);
+    req.writeUInt32BE(0x2112a442, 4);
+    tx.copy(req, 8);
+    let done = false;
+    const finish = (r) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      try {
+        sock.close();
+      } catch {}
+      resolve(r);
+    };
+    const timer = setTimeout(() => finish({ host, ok: false }), timeoutMs);
+    sock.on('error', () => finish({ host, ok: false }));
+    sock.on('message', (msg) => {
+      try {
+        let off = 20;
+        while (off + 4 <= msg.length) {
+          const type = msg.readUInt16BE(off);
+          const len = msg.readUInt16BE(off + 2);
+          if ((type === 0x0020 || type === 0x0001) && len >= 8 && msg.readUInt8(off + 5) === 0x01) {
+            let port2 = msg.readUInt16BE(off + 6);
+            const ip = [msg.readUInt8(off + 8), msg.readUInt8(off + 9), msg.readUInt8(off + 10), msg.readUInt8(off + 11)];
+            if (type === 0x0020) {
+              port2 ^= 0x2112;
+              ip[0] ^= 0x21; ip[1] ^= 0x12; ip[2] ^= 0xa4; ip[3] ^= 0x42;
+            }
+            return finish({ host, ok: true, ip: ip.join('.'), port: port2 });
+          }
+          off += 4 + len + ((4 - (len % 4)) % 4);
+        }
+      } catch {}
+      finish({ host, ok: false });
+    });
+    sock.send(req, port, host, (err) => {
+      if (err) finish({ host, ok: false });
+    });
+  });
+}
+
+async function testCallConnection() {
+  const [a, b] = await Promise.all([stunProbe('stun.l.google.com', 19302), stunProbe('stun.cloudflare.com', 3478)]);
+  let msg;
+  let type = 'info';
+  if (!a.ok && !b.ok) {
+    type = 'error';
+    msg =
+      'Este computador não conseguiu falar por UDP com a internet. É isso que deixa a chamada em "Conectando...".\n\n' +
+      'Tente: desligar VPN ou antivírus com firewall de rede; no Windows, abrir "Permitir um aplicativo pelo Firewall do Windows Defender" e liberar o Vault nas redes privada e pública; ou testar em outra rede (ex.: o 4G do celular).';
+  } else if (a.ok && b.ok && a.port !== b.port) {
+    type = 'warning';
+    msg =
+      `O UDP funciona (IP público ${a.ip}), mas o seu roteador/operadora muda a porta a cada destino (NAT simétrico ou CGNAT). ` +
+      'Nessa rede a ligação direta com algumas pessoas não fecha e a chamada fica em "Conectando...".\n\n' +
+      'Solução: configurar um servidor TURN na Vercel (NEXT_PUBLIC_TURN_URL, NEXT_PUBLIC_TURN_USERNAME e NEXT_PUBLIC_TURN_CREDENTIAL), ou pedir à operadora um IP público/desativar o CGNAT.';
+  } else {
+    msg =
+      `A rede deste computador está boa para chamadas (UDP funciona, IP público ${(a.ok ? a : b).ip}).\n\n` +
+      'Se ainda assim ficar em "Conectando...", o problema está no outro lado ou no firewall do Windows bloqueando o Vault: libere o Vault em "Permitir um aplicativo pelo Firewall".';
+  }
+  console.log('[vault] teste de chamadas', JSON.stringify({ a, b }));
+  await dialog.showMessageBox(mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined, {
+    type,
+    title: 'Teste de conexão das chamadas',
+    message: 'Teste de conexão das chamadas',
+    detail: msg,
+    buttons: ['OK'],
+  });
+}
+
 function buildTrayMenu() {
   if (!tray) return;
   const items = [{ label: 'Abrir o Vault', click: showWindow }];
@@ -229,6 +311,7 @@ function buildTrayMenu() {
     { label: 'Mutar / desmutar (Ctrl+Shift+M)', click: () => sendShortcut('mute') },
     { label: 'Ensurdecer (Ctrl+Shift+D)', click: () => sendShortcut('deafen') },
     { type: 'separator' },
+    { label: 'Testar conexão das chamadas', click: () => void testCallConnection() },
     { label: 'Abrir o Vault ao ligar o computador', type: 'checkbox', checked: launchAtLoginEnabled(), click: toggleLaunchAtLogin },
     { label: `Versão ${app.getVersion()}`, enabled: false },
     { label: 'Procurar atualizações', click: () => checkForUpdates(true) },
