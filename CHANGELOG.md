@@ -2,6 +2,10 @@
 
 Segue o versionamento semântico (MAIOR.MENOR.CORREÇÃO): correção de erro sobe o último número, novidade sobe o do meio, mudança grande sobe o primeiro. A versão vem do `package.json`, e todo push precisa subir a versão (o publicador recusa uma versão que já existe).
 
+## 1.8.0 — 2026-11-12
+- O app não mudou: o número sobe junto com o do site (1.8.0), e o app abre o site, então já recebe tudo ao reabrir o Vault.
+- Novidades do site 1.8.0: lousa estilo Excalidraw com tela infinita e zoom, imagens e vídeos na lousa, conexões entre elementos (setas que acompanham), código 2FA ao vivo e importação de contas por planilha na Contingência.
+
 ## 1.7.0 — 2026-11-07
 - Contingência > Proxies (site 1.7.0): mostra qual proxy está em uso por qual conta, os livres e os divididos entre contas. O app já mostra ao reabrir; o app em si não mudou, o número sobe junto com o do site.
 
