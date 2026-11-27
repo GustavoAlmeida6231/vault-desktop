@@ -2,6 +2,14 @@
 
 Segue o versionamento semântico (MAIOR.MENOR.CORREÇÃO): correção de erro sobe o último número, novidade sobe o do meio, mudança grande sobe o primeiro. A versão vem do `package.json`, e todo push precisa subir a versão (o publicador recusa uma versão que já existe).
 
+## 1.9.0 — 2026-11-26
+- **Chamadas no app**: enquanto você está numa chamada o computador não apaga a tela nem dorme (dormir derrubava a chamada e o compartilhamento). Na bandeja aparecem "Em chamada", **Desmutar** e **Sair da chamada**, e o ícone avisa se você está mutado.
+- **Seletor de tela melhor**: a lista e as miniaturas se atualizam sozinhas (janela aberta depois aparece sem reabrir), busca de janelas pelo nome, telas chamadas de "Tela 1 / Tela 2", e ele já vem marcado com o que você compartilhou da última vez (aba, som e janela). A janela do próprio Vault vai para o fim da lista.
+- **Janela**: o Vault lembra o tamanho, a posição e se estava maximizado. **Ctrl +**, **Ctrl -** e **Ctrl 0** aumentam, diminuem e voltam o tamanho de tudo (fica salvo; também no menu da bandeja).
+- Mensagem nova com o Vault atrás de outras janelas: o ícone pisca na barra de tarefas, igual ao Discord.
+- **Atualização mais visível**: quando a versão nova termina de baixar aparece um aviso perto do relógio; clicar nele reinicia já atualizado (no meio de uma chamada ele só avisa). O Vault também procura atualização logo depois que o PC acorda do repouso.
+- Novidades do site 1.9.0 que o app já mostra: escolher **microfone, alto-falante e câmera** (dá para trocar no meio da chamada), teste de microfone, **redução de ruído**, **tela cheia** na tela compartilhada e nas câmeras, **sair da transmissão** e **mutar a transmissão** (com volume), e volume por pessoa.
+
 ## 1.8.0 — 2026-11-12
 - O app não mudou: o número sobe junto com o do site (1.8.0), e o app abre o site, então já recebe tudo ao reabrir o Vault.
 - Novidades do site 1.8.0: lousa estilo Excalidraw com tela infinita e zoom, imagens e vídeos na lousa, conexões entre elementos (setas que acompanham), código 2FA ao vivo e importação de contas por planilha na Contingência.

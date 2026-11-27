@@ -6,6 +6,8 @@ Programa do Vault (metas, chat e chamadas) para Windows. Ele abre o Vault em htt
 - uso da **placa de vídeo** e sem perder desempenho quando fica atrás de um jogo
 - atalhos globais: **Ctrl+Shift+M** muta e **Ctrl+Shift+D** ensurdece
 - clicar no **X** deixa o Vault na **bandeja** (perto do relógio). Para fechar de vez: botão direito no ícone → **Sair do Vault**
+- durante a chamada o computador **não dorme nem apaga a tela**, e a bandeja mostra **Desmutar** e **Sair da chamada**
+- lembra **tamanho, posição e zoom** da janela (**Ctrl +**, **Ctrl -**, **Ctrl 0**)
 - **atualização automática**: quando sai uma versão nova, ela é baixada sozinha e aparece uma **seta verde** no canto superior esquerdo. Clique nela para reiniciar já atualizado
 
 ## Instalar

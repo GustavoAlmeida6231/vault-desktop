@@ -8,9 +8,10 @@
  *  - atalhos globais: Ctrl+Shift+M (mutar) e Ctrl+Shift+D (ensurdecer)
  *  - fechar a janela só esconde: o Vault continua na bandeja (perto do relógio), igual ao Discord
  *  - atualização automática: baixa sozinho a versão nova e mostra o ícone verde no canto superior esquerdo
+ *  - lembra tamanho, posição e zoom da janela; não deixa o PC dormir durante uma chamada
  */
 
-const { app, BrowserWindow, Menu, Tray, desktopCapturer, dialog, globalShortcut, ipcMain, nativeImage, powerMonitor, session, shell } = require('electron');
+const { app, BrowserWindow, Menu, Tray, desktopCapturer, dialog, globalShortcut, ipcMain, nativeImage, powerMonitor, powerSaveBlocker, screen, session, shell } = require('electron');
 const dgram = require('dgram');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
@@ -86,6 +87,86 @@ const ICON_PATH = path.join(__dirname, 'build', process.platform === 'win32' ? '
 /** Estado da atualização que o site mostra no canto superior esquerdo. */
 let updateState = { status: 'idle' }; // idle | downloading | ready
 
+/* ---------------- preferências salvas (janela, zoom, seletor de tela) ---------------- */
+
+function prefsPath(name) {
+  return path.join(app.getPath('userData'), name);
+}
+function readJson(name, fallback) {
+  try {
+    const v = JSON.parse(fs.readFileSync(prefsPath(name), 'utf8'));
+    return v && typeof v === 'object' ? { ...fallback, ...v } : fallback;
+  } catch {
+    return fallback;
+  }
+}
+function writeJson(name, value) {
+  try {
+    fs.writeFileSync(prefsPath(name), JSON.stringify(value));
+  } catch {}
+}
+
+const ZOOM_STEPS = [0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
+let windowState = { width: 1400, height: 880, x: undefined, y: undefined, maximized: false, zoom: 1 };
+
+/** A janela salva ainda cabe em algum monitor? (monitor desconectado, resolução trocada...) */
+function boundsVisible(b) {
+  if (typeof b.x !== 'number' || typeof b.y !== 'number') return false;
+  return screen.getAllDisplays().some(({ workArea: a }) => b.x + 80 > a.x && b.y + 40 > a.y && b.x < a.x + a.width - 80 && b.y < a.y + a.height - 40);
+}
+
+let saveStateTimer = null;
+function saveWindowState() {
+  clearTimeout(saveStateTimer);
+  saveStateTimer = setTimeout(() => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const maximized = mainWindow.isMaximized();
+    const fullscreen = mainWindow.isFullScreen();
+    // Maximizada ou em tela cheia: guarda o tamanho "normal" para quando sair desse modo
+    const b = maximized || fullscreen ? mainWindow.getNormalBounds() : mainWindow.getBounds();
+    windowState = { ...windowState, ...b, maximized };
+    writeJson('window-state.json', windowState);
+  }, 400);
+}
+
+function setZoom(next) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const zoom = Math.min(2, Math.max(0.67, Math.round(next * 100) / 100));
+  mainWindow.webContents.setZoomFactor(zoom);
+  windowState = { ...windowState, zoom };
+  writeJson('window-state.json', windowState);
+}
+function stepZoom(dir) {
+  const cur = mainWindow ? mainWindow.webContents.getZoomFactor() : 1;
+  const idx = ZOOM_STEPS.findIndex((z) => z >= cur - 0.001);
+  const at = idx === -1 ? ZOOM_STEPS.length - 1 : idx;
+  setZoom(ZOOM_STEPS[Math.min(ZOOM_STEPS.length - 1, Math.max(0, at + dir))]);
+}
+
+/* ---------------- estado da chamada (o site avisa) ---------------- */
+
+let callState = { inCall: false, muted: false, deafened: false, channel: '' };
+let sleepBlockerId = null;
+
+function applyCallState(next) {
+  callState = {
+    inCall: Boolean(next && next.inCall),
+    muted: Boolean(next && next.muted),
+    deafened: Boolean(next && next.deafened),
+    channel: next && typeof next.channel === 'string' ? next.channel.slice(0, 80) : '',
+  };
+  // Em chamada o Windows não apaga a tela nem dorme (dormir derruba a chamada e o compartilhamento)
+  if (callState.inCall && sleepBlockerId === null) {
+    sleepBlockerId = powerSaveBlocker.start('prevent-display-sleep');
+  } else if (!callState.inCall && sleepBlockerId !== null) {
+    try {
+      powerSaveBlocker.stop(sleepBlockerId);
+    } catch {}
+    sleepBlockerId = null;
+  }
+  buildTrayMenu();
+}
+
 /* ---------------- janela principal ---------------- */
 
 function offlinePage() {
@@ -98,9 +179,12 @@ function offlinePage() {
 }
 
 function createWindow() {
+  windowState = readJson('window-state.json', windowState);
+  const place = boundsVisible(windowState) ? { x: windowState.x, y: windowState.y } : {};
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 880,
+    width: Math.max(960, Number(windowState.width) || 1400),
+    height: Math.max(600, Number(windowState.height) || 880),
+    ...place,
     minWidth: 960,
     minHeight: 600,
     show: false,
@@ -115,11 +199,21 @@ function createWindow() {
       sandbox: true,
       backgroundThrottling: false,
       spellcheck: false,
+      // O site lê a versão do app por aqui (window.vaultDesktop.version)
+      additionalArguments: [`--vault-version=${app.getVersion()}`],
     },
   });
 
   mainWindow.once('ready-to-show', () => {
+    if (windowState.maximized) mainWindow.maximize();
     if (!startedHidden) mainWindow.show();
+  });
+  for (const ev of ['resize', 'move', 'maximize', 'unmaximize']) mainWindow.on(ev, saveWindowState);
+  // Clicou na janela: para de piscar na barra de tarefas
+  mainWindow.on('focus', () => {
+    try {
+      mainWindow.flashFrame(false);
+    } catch {}
   });
   // Clicar no X esconde a janela; a chamada e o chat continuam rodando na bandeja
   mainWindow.on('close', (e) => {
@@ -163,6 +257,15 @@ function createWindow() {
   });
   mainWindow.webContents.on('did-finish-load', () => {
     if (originOf(mainWindow.webContents.getURL()) === APP_ORIGIN) retryDelay = 3000;
+    // O zoom escolhido (Ctrl + / Ctrl -) vale de novo depois de recarregar
+    if (windowState.zoom && windowState.zoom !== 1) mainWindow.webContents.setZoomFactor(windowState.zoom);
+  });
+  // Recarregou ou caiu a página: a chamada acabou, libera o PC para dormir de novo
+  mainWindow.webContents.on('did-start-navigation', (e, _url, isInPlace, isMainFrame) => {
+    // Electron novo manda os dados no próprio evento; o antigo, nos argumentos
+    const main = e && typeof e.isMainFrame === 'boolean' ? e.isMainFrame : isMainFrame;
+    const sameDoc = e && typeof e.isSameDocument === 'boolean' ? e.isSameDocument : isInPlace;
+    if (main && !sameDoc && callState.inCall) applyCallState({ inCall: false });
   });
   // O Chromium da página travou ou foi encerrado: recarrega em vez de deixar a janela em branco
   mainWindow.webContents.on('render-process-gone', () => {
@@ -172,16 +275,27 @@ function createWindow() {
   });
 
   // F5 recarrega, F11 tela cheia, Ctrl+Shift+I abre o console (para diagnóstico)
+  // Ctrl + / Ctrl - / Ctrl 0: aumenta, diminui e volta o tamanho de tudo (fica salvo)
   mainWindow.webContents.on('before-input-event', (e, input) => {
     if (input.type !== 'keyDown') return;
+    const key = input.key.toLowerCase();
     if (input.key === 'F5') {
       mainWindow.webContents.reload();
       e.preventDefault();
     } else if (input.key === 'F11') {
       mainWindow.setFullScreen(!mainWindow.isFullScreen());
       e.preventDefault();
-    } else if (input.control && input.shift && input.key.toLowerCase() === 'i') {
+    } else if (input.control && input.shift && key === 'i') {
       mainWindow.webContents.toggleDevTools();
+      e.preventDefault();
+    } else if (input.control && !input.alt && (key === '=' || key === '+' || input.code === 'NumpadAdd')) {
+      stepZoom(1);
+      e.preventDefault();
+    } else if (input.control && !input.alt && (key === '-' || input.code === 'NumpadSubtract')) {
+      stepZoom(-1);
+      e.preventDefault();
+    } else if (input.control && !input.alt && !input.shift && (key === '0' || input.code === 'Numpad0')) {
+      setZoom(1);
       e.preventDefault();
     }
   });
@@ -306,11 +420,28 @@ function buildTrayMenu() {
   if (updateState.status === 'ready') {
     items.push({ label: `Reiniciar e atualizar para ${updateState.version}`, click: installUpdate });
   }
+  items.push({ type: 'separator' });
+  if (callState.inCall) {
+    items.push({ label: `Em chamada${callState.channel ? `: ${callState.channel}` : ''}`, enabled: false });
+  }
+  items.push(
+    {
+      label: callState.inCall && callState.muted ? 'Desmutar (Ctrl+Shift+M)' : 'Mutar / desmutar (Ctrl+Shift+M)',
+      click: () => sendShortcut('mute'),
+    },
+    { label: callState.inCall && callState.deafened ? 'Voltar a ouvir (Ctrl+Shift+D)' : 'Ensurdecer (Ctrl+Shift+D)', click: () => sendShortcut('deafen') },
+  );
+  if (callState.inCall) items.push({ label: 'Sair da chamada', click: () => sendShortcut('leave') });
   items.push(
     { type: 'separator' },
-    { label: 'Mutar / desmutar (Ctrl+Shift+M)', click: () => sendShortcut('mute') },
-    { label: 'Ensurdecer (Ctrl+Shift+D)', click: () => sendShortcut('deafen') },
-    { type: 'separator' },
+    {
+      label: 'Tamanho da tela do Vault',
+      submenu: [
+        { label: 'Aumentar (Ctrl +)', click: () => stepZoom(1) },
+        { label: 'Diminuir (Ctrl -)', click: () => stepZoom(-1) },
+        { label: 'Tamanho normal (Ctrl 0)', click: () => setZoom(1) },
+      ],
+    },
     { label: 'Testar conexão das chamadas', click: () => void testCallConnection() },
     { label: 'Abrir o Vault ao ligar o computador', type: 'checkbox', checked: launchAtLoginEnabled(), click: toggleLaunchAtLogin },
     { label: `Versão ${app.getVersion()}`, enabled: false },
@@ -318,7 +449,10 @@ function buildTrayMenu() {
     { label: 'Sair do Vault', click: quitApp },
   );
   tray.setContextMenu(Menu.buildFromTemplate(items));
-  tray.setToolTip(updateState.status === 'ready' ? 'Vault (atualização pronta)' : 'Vault');
+  let tip = 'Vault';
+  if (callState.inCall) tip += callState.deafened ? ' (em chamada, ensurdecido)' : callState.muted ? ' (em chamada, mutado)' : ' (em chamada)';
+  if (updateState.status === 'ready') tip += ' (atualização pronta)';
+  tray.setToolTip(tip);
 }
 
 function createTray() {
@@ -327,6 +461,11 @@ function createTray() {
   buildTrayMenu();
   tray.on('click', showWindow);
   tray.on('double-click', showWindow);
+  // Clique no aviso "Vault x.y.z pronto": reinicia atualizado (no meio da chamada só abre a janela)
+  tray.on('balloon-click', () => {
+    if (updateState.status === 'ready' && !callState.inCall) installUpdate();
+    else showWindow();
+  });
 }
 
 /* ---------------- atualização automática ---------------- */
@@ -363,7 +502,21 @@ function setupUpdater() {
   autoUpdater.on('download-progress', (p) =>
     setUpdateState({ status: 'downloading', version: updateState.version, percent: Math.round(p.percent || 0) }),
   );
-  autoUpdater.on('update-downloaded', (info) => setUpdateState({ status: 'ready', version: info.version }));
+  autoUpdater.on('update-downloaded', (info) => {
+    setUpdateState({ status: 'ready', version: info.version });
+    // Avisa também perto do relógio (muita gente deixa o Vault só na bandeja e não vê a seta verde)
+    if (tray && process.platform === 'win32') {
+      try {
+        tray.displayBalloon({
+          iconType: 'info',
+          title: `Vault ${info.version} pronto`,
+          content: callState.inCall
+            ? 'A atualização já foi baixada. Depois da chamada, clique na seta verde (ou aqui) para reiniciar atualizado.'
+            : 'Clique aqui ou na seta verde do Vault para reiniciar já atualizado. Se preferir, ele atualiza sozinho ao sair.',
+        });
+      } catch {}
+    }
+  });
   autoUpdater.on('update-not-available', () => {
     if (lastManualCheck && tray && process.platform === 'win32') {
       tray.displayBalloon({ iconType: 'info', title: 'Vault atualizado', content: `Você já está na versão mais nova (${app.getVersion()}).` });
@@ -387,6 +540,20 @@ ipcMain.on('vault:show-window', (event) => {
 });
 ipcMain.on('vault:install-update', (event) => {
   if (mainWindow && event.sender === mainWindow.webContents) installUpdate();
+});
+// O site avisa quando entra/sai da chamada e quando muta (bandeja e "não dormir")
+ipcMain.on('vault:call-state', (event, state) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) return;
+  if (originOf(event.sender.getURL()) !== APP_ORIGIN) return;
+  applyCallState(state);
+});
+// Mensagem nova com o Vault em segundo plano: o ícone pisca na barra de tarefas (igual ao Discord)
+ipcMain.on('vault:flash', (event) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents || mainWindow.isDestroyed()) return;
+  if (mainWindow.isFocused() || !mainWindow.isVisible()) return;
+  try {
+    mainWindow.flashFrame(true);
+  } catch {}
 });
 
 function sendShortcut(action) {
@@ -449,18 +616,29 @@ ipcMain.handle('picker:sources', async (event) => {
     fetchWindowIcons: true,
   });
   let pickerId = '';
+  let mainId = '';
   try {
     pickerId = picker.win.getMediaSourceId();
+    if (mainWindow && !mainWindow.isDestroyed()) mainId = mainWindow.getMediaSourceId();
   } catch {}
+  const screens = sources.filter((s) => s.id.startsWith('screen:'));
+  const screenName = (s) => {
+    if (screens.length <= 1) return 'Tela inteira';
+    const n = screens.indexOf(s) + 1;
+    return `Tela ${n}`;
+  };
   return {
     audioRequested: picker.audioRequested,
     audioSupported: process.platform === 'win32',
     excludesOwnAudio: canExcludeOwnAudio(),
+    prefs: readJson('picker-prefs.json', { kind: 'screen', audio: true, lastName: '' }),
     sources: sources
+      // a própria janela do seletor não aparece; a do Vault fica no fim (compartilhar o Vault mostra a própria call)
       .filter((s) => s.id !== pickerId)
+      .sort((a, b) => (a.id === mainId) - (b.id === mainId))
       .map((s) => ({
         id: s.id,
-        name: s.name,
+        name: s.id.startsWith('screen:') ? screenName(s) : s.name,
         kind: s.id.startsWith('screen:') ? 'screen' : 'window',
         thumbnail: s.thumbnail && !s.thumbnail.isEmpty() ? s.thumbnail.toDataURL() : null,
         icon: s.appIcon && !s.appIcon.isEmpty() ? s.appIcon.toDataURL() : null,
@@ -471,6 +649,12 @@ ipcMain.handle('picker:sources', async (event) => {
 ipcMain.on('picker:choose', (event, choice) => {
   if (!fromPicker(event)) return;
   if (!choice || typeof choice.id !== 'string') return closePicker(null);
+  // Lembra a aba, o som e o que foi escolhido para já vir marcado da próxima vez
+  writeJson('picker-prefs.json', {
+    kind: choice.id.startsWith('screen:') ? 'screen' : 'window',
+    audio: Boolean(choice.audio),
+    lastName: typeof choice.name === 'string' ? choice.name.slice(0, 200) : '',
+  });
   closePicker({ id: choice.id, audio: Boolean(choice.audio) });
 });
 
@@ -551,7 +735,11 @@ if (!app.requestSingleInstanceLock()) {
       }
       mainWindow.webContents.executeJavaScript("window.dispatchEvent(new Event('online'))").catch(() => {});
     };
-    powerMonitor.on('resume', () => setTimeout(nudge, 3000));
+    powerMonitor.on('resume', () => {
+      setTimeout(nudge, 3000);
+      // Notebook que passou a noite dormindo: procura versão nova logo ao acordar
+      setTimeout(() => checkForUpdates(), 20_000);
+    });
     powerMonitor.on('unlock-screen', nudge);
     setupShortcuts();
     setupUpdater();
